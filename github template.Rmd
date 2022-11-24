@@ -12,6 +12,7 @@ library(p8105.datasets)
 
 set.seed(1)
 ```
+
 ## Q2
 ### Importing data
 ```{r}
@@ -19,10 +20,10 @@ homicide_url = "https://raw.githubusercontent.com/washingtonpost/data-homicides/
 
 homicide = read.csv(homicide_url) %>% janitor::clean_names()
 
-homicide %>% group_by(victim_age) %>% summarize()
 ```
+There is `r nrow(homicide)` observations and `r ncol(homicide)` variables in the dataset. The variables are `r names(homicide)`
 
-### Create a city_state variable and a binary variable indicating whether the homicide is solved. Omit cities, limit "victim_race" is white or black. Mutate "victim_age" as a numeric variable.
+### Prepare data for analysis.
 ```{r}
 homicide_analyze = homicide %>% 
   mutate(case_solve = if_else(disposition == "Closed by arrest", 1, 0),
@@ -35,8 +36,9 @@ homicide_analyze = homicide %>%
   filter(victim_race == "White" | victim_race == "Black")
   
 ```
+Create a city_state variable and a binary variable indicating whether the homicide is solved. Omit cities, limit "victim_race" is white or black. Mutate "victim_age" as a numeric variable. There is `r nrow(homicide_analyze)` observations and `r ncol(homicide_analyze)` variables in the dataset. The variables are `r names(homicide_analyze)`
 
-For the city of Baltimore, MD, use the glm function to fit a logistic regression with resolved vs unresolved as the outcome and victim age, sex and race as predictors. Save the output of glm as an R object; apply the broom::tidy to this object; and obtain the estimate and confidence interval of the adjusted odds ratio for solving homicides comparing male victims to female victims keeping all other variables fixed.
+### Fit a logistic regression for Baltimore.
 ```{r}
 Baltimore_glm = lm(case_solve ~ victim_age + victim_sex + victim_race, data = homicide_analyze) %>% 
   broom::tidy() 
@@ -48,8 +50,12 @@ Baltimore_glm %>%
          odds_ratio = exp(estimate)) %>% 
   select(estimate, odds_ratio, lower_bound, upper_bound) %>% knitr::kable(digits = 2)
 ```
+Outcome = resolved vs unresolved;
+Predictors =  victim age, sex and race.
+The above table shows the estimate and confidence interval of the adjusted odds ratio for solving homicides comparing male victims to female victims keeping all other variables fixed.
 
-Now run glm for each of the cities in your dataset, and extract the adjusted odds ratio (and CI) for solving homicides comparing male victims to female victims. Do this within a “tidy” pipeline, making use of purrr::map, list columns, and unnest as necessary to create a dataframe with estimated ORs and CIs for each city.
+
+### Fit a logistic regression for all the cities in the dataset.
 ```{r}
 homicide_male_vs_female = homicide_analyze %>% 
   nest(data = !city_state) %>% 
@@ -66,8 +72,10 @@ homicide_male_vs_female = homicide_analyze %>%
 knitr::kable(homicide_male_vs_female, digits = 2)
   
 ```
+The above table shows the adjusted odds ratios (and CIs) for solving homicides comparing male victims to female victims in all cities keeping all other variables fixed.
 
-Create a plot that shows the estimated ORs and CIs for each city. Organize cities according to estimated OR, and comment on the plot.
+
+### Plot the ORs and CIs for each city.
 ```{r}
 homicide_male_vs_female %>% 
   mutate(city_state = fct_reorder(city_state, OR_male_vs_female, .desc = TRUE)) %>% 
@@ -75,9 +83,11 @@ homicide_male_vs_female %>%
   geom_point() +
   geom_errorbar(aes(xmin = lower_bound, xmax = upper_bound))
 ```
+The above plot shows that New York City has the lowest odds for solving homicides when comparing male victims to female victims. The odds for solving homicides for male victims is more than 20% lower than female victims, keeping all other variables fixed. It is statistically significant at a level of 5%. On the other hand, the odds for solving homicides when comparing male victims to female victims Albuquerque is the highest, keeping all other variables fixed. The odds for solving homicides for male victims is 1.1 times the odds for solving homicides for female victims, keeping all other variables fixed. However, this odds is not statistically significant.
+
 
 ## Q3
-
+### Import data
 ```{r}
 birthweight = read.csv("./birthweight.csv") %>% 
   janitor::clean_names() 
@@ -86,7 +96,7 @@ birthweight %>%
   summarize(n = sum(is.na(birthweight)))
 ```
 
-
+### data preparation
 ```{r}
 birthweight = birthweight %>% 
   mutate(babysex = as.factor(babysex),
@@ -100,6 +110,8 @@ birthweight = birthweight %>%
 ```
 
 Propose a regression model for birthweight. This model may be based on a hypothesized structure for the factors that underly birthweight, on a data-driven model-building process, or a combination of the two. Describe your modeling process and show a plot of model residuals against fitted values – use add_predictions and add_residuals in making this plot.
+
+### Fit the hypothesized regression modle for birthweight.
 ```{r}
 birthweight_hyp = lm(bwt ~ blength + babysex + malform, data = birthweight) 
 
@@ -108,12 +120,11 @@ birthweight %>%
   add_residuals(birthweight_hyp) %>% 
   ggplot(aes(x = pred, y = resid)) + geom_point() 
 ```
+I hypothesized the birthweight is associated with the baby's length at birth, baby's sex, and the presence of malformations that could affect weight.
+The above plot shows that the residuals spread somewhat equally around 0, with few outliers when prediction of birthweight is above 4000 and below 1000.
 
-Compare your model to two others:
 
-One using length at birth and gestational age as predictors (main effects only)
-One using head circumference, length, sex, and all interactions (including the three-way interaction) between these
-Make this comparison in terms of the cross-validated prediction error; use crossv_mc and functions in purrr as appropriate.
+### Fit the main model and the interaction model and cross validate caculating root-mean-squared-error on testing data.
 ```{r}
 birthweight_cv = 
   crossv_mc(birthweight, 100) %>% 
@@ -126,10 +137,12 @@ birthweight_cv =
          rmse_main = map2_dbl(main, test, ~rmse(model = .x, data = .y)),
          rmse_interaction = map2_dbl(interaction, test, ~rmse(model = .x, data = .y)))
 
-
 ```
+Predictors for main effect model: length at birth and gestational age;
+Predictors for interaction model: head circumference, length, sex, and all interactions (including the three-way interaction) between these.
 
 
+### Plot to compare models
 ```{r}
 birthweight_cv %>% 
   select(starts_with("rmse")) %>% 
@@ -141,4 +154,4 @@ birthweight_cv %>%
   ggplot(aes(x = model, y = rmse)) + geom_boxplot()
 
 ```
-
+The above boxplot shows that the interaction model has the lowest root-mean-squared-error and the hypothesized model has the biggest. So, the interaction model has the best fit to the data among the three models.
