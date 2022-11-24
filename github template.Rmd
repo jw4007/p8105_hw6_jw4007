@@ -99,13 +99,46 @@ birthweight = birthweight %>%
          wtgain_kg = wtgain * 0.4536) 
 ```
 
-
+Propose a regression model for birthweight. This model may be based on a hypothesized structure for the factors that underly birthweight, on a data-driven model-building process, or a combination of the two. Describe your modeling process and show a plot of model residuals against fitted values – use add_predictions and add_residuals in making this plot.
 ```{r}
-birthweight_glm = birthweight %>% 
-  nest(data =)
+birthweight_hyp = lm(bwt ~ blength + babysex + malform, data = birthweight) 
+
+birthweight %>% 
+  add_predictions(birthweight_hyp) %>% 
+  add_residuals(birthweight_hyp) %>% 
+  ggplot(aes(x = pred, y = resid)) + geom_point() 
+```
+
+Compare your model to two others:
+
+One using length at birth and gestational age as predictors (main effects only)
+One using head circumference, length, sex, and all interactions (including the three-way interaction) between these
+Make this comparison in terms of the cross-validated prediction error; use crossv_mc and functions in purrr as appropriate.
+```{r}
+birthweight_cv = 
+  crossv_mc(birthweight, 100) %>% 
+  mutate(train = map(train, as_tibble),
+         test = map(test, as_tibble)) %>% 
+  mutate(hyp = map(train, ~lm(bwt ~ blength + babysex + malform, data = .x)),
+         main = map(train, ~lm(bwt ~ blength + gaweeks, data = .x)),
+         interaction = map(train, ~lm(bwt ~ bhead + blength + babysex + bhead*blength + bhead*babysex + blength*babysex + bhead*blength*babysex, data = .x))) %>% 
+  mutate(rmse_hyp = map2_dbl(hyp, test, ~rmse(model = .x, data = .y)),
+         rmse_main = map2_dbl(main, test, ~rmse(model = .x, data = .y)),
+         rmse_interaction = map2_dbl(interaction, test, ~rmse(model = .x, data = .y)))
+
+
 ```
 
 
 ```{r}
+birthweight_cv %>% 
+  select(starts_with("rmse")) %>% 
+  pivot_longer(everything(),
+               names_to = "model",
+               values_to = "rmse",
+               names_prefix = "rmse_") %>% 
+  mutate(model = fct_inorder(model)) %>% 
+  ggplot(aes(x = model, y = rmse)) + geom_boxplot()
+
 ```
 
